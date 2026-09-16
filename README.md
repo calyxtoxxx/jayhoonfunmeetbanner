@@ -22,7 +22,8 @@ A self-contained, app-free augmented-reality banner.
 The whole visitor flow is three steps:
 
 1. **Scan the QR code** on the printed banner - it opens this page. No app to install.
-2. **Tap Start** and allow the camera; the page asks them to point the phone at the artwork.
+2. **The camera opens by itself** (the browser only asks for permission; tap *Allow*). The page
+   shows a "point your camera at the artwork" prompt over the live camera view.
 3. **The film plays anchored to the artwork** - tracked in real 3D, so it stays locked to the
    print and moves exactly with the camera and the hand holding it.
 
@@ -134,8 +135,23 @@ no debug parameters. The page is one file with three screens and one 3D object.
 | `<a-scene mindar-image>` | The AR engine; `assets/targets.mind` is the compiled artwork. |
 | `#anchor` → `#group` → `#film` | The film plane is a child of the tracked anchor, so it inherits the artwork's pose every frame. |
 
-Sound: playback starts unmuted, and if the browser refuses (autoplay policy) the page silently
-falls back to muted playback instead of adding a sound button.
+There is no start screen: a small `boot()` poll waits for MindAR to be configured and calls
+`start()` immediately, so the camera opens as soon as the page loads. If a browser blocks that
+(some iOS versions want a gesture) the hidden `#retry` button appears; the rest of the time it
+never shows.
+
+Sound: playback is asked for unmuted and silently falls back to muted if the autoplay policy
+refuses; the first touch anywhere on the page turns the sound on, so no sound button is needed.
+
+Two implementation notes worth keeping:
+
+* **The dark page colour must be set on `<html>`, never on `<body>`.** MindAR draws the camera
+  `<video>` at `z-index:-2`, and an in-flow block background on `<body>` paints *above*
+  negative-z-index children - the camera feed then looks blank/black until the artwork is found.
+* **Camera resolution**: MindAR asks for `{facingMode:'environment'}` with no size, so phones
+  hand back a low-res 640x480 stream. The page wraps `navigator.mediaDevices.getUserMedia` and
+  injects `width/height/frameRate` ideals (1920x1080 @30fps); the browser falls back to whatever
+  the device supports. Lower the numbers in that wrapper if an older phone struggles.
 
 ### Tuning the tracking
 

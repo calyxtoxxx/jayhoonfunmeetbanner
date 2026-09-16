@@ -9,7 +9,7 @@
  * No npm packages needed for verification itself.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +55,40 @@ function makeFakeCamera(dir) {
   return ff.status === 0 && existsSync(out) ? out : null;
 }
 
+/* The AR view must always show the live camera - never a blank page. Runs the page against a
+   flat green fake camera with no artwork in sight and colour-checks the rendered pixels. */
+async function cameraSuite() {
+  console.log('\n\n########## camera preview visible (not blank) ##########\n');
+  const dir = mkdtempSync(join(tmpdir(), 'ar-camview-'));
+  const feed = join(dir, 'flat.y4m');
+  const shot = join(dir, 'view.png');
+  const px = join(dir, 'px.raw');
+  const mk = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i',
+    'color=c=0x2E7D32:s=1024x576:d=6:r=15', '-pix_fmt', 'yuv420p', '-f', 'yuv4mpegpipe', feed]);
+  if (mk.status !== 0) {
+    console.log('! ffmpeg unavailable - skipping');
+    results.push({ name: 'camera preview visible (not blank)', ok: null });
+    return;
+  }
+  process.env.AR_SHOT = shot;
+  const code = await runNode(['cdp-check.mjs', BASE, join(HERE, 'checks-camera.mjs'),
+    '--fake-camera', '--fake-video=' + feed]);
+  const ff = spawnSync('ffmpeg', ['-v', 'error', '-y', '-i', shot, '-vf', 'scale=1:1',
+    '-f', 'rawvideo', '-pix_fmt', 'rgb24', px]);
+  let ok = false;
+  let detail = 'no screenshot produced';
+  if (ff.status === 0 && existsSync(px)) {
+    const b = readFileSync(px);
+    const [r, g, bl] = [b[0], b[1], b[2]];
+    ok = r > 25 && g > 60 && g > r + 30 && g > bl + 30;   /* green feed, not the dark page */
+    detail = `average pixel rgb(${r},${g},${bl}) - expected ~rgb(46,125,50) (camera), not rgb(4,6,12) (blank)`;
+  }
+  console.log((ok ? 'PASS' : 'FAIL') + '  rendered pixels come from the camera feed  ->  ' + detail);
+  results.push({ name: 'camera preview visible (not blank)', ok: code === 0 && ok });
+  delete process.env.AR_SHOT;
+  try { rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+}
+
 const results = [];
 async function suite(name, url, checks, extra = []) {
   console.log(`\n\n########## ${name} ##########\n`);
@@ -73,7 +107,8 @@ try {
     await suite('banner print layout', BASE + 'banner/banner.html', 'checks-banner.mjs');
     await suite('printed QR decodes', BASE + 'banner/banner.html', 'checks-qr.mjs');
   }
-  if (only === 'all' || only === 'ar') await suite('app boot / camera / film', BASE, 'checks-ar.mjs', ['--fake-camera']);
+  if (only === 'all' || only === 'ar') await suite('app boot / camera / film', BASE, 'checks-ar.mjs', ['--fake-camera', '--spy-gum']);
+  if (only === 'all' || only === 'ar' || only === 'camera') await cameraSuite();
 
   if (only === 'all' || only === 'detect') {
     tmp = mkdtempSync(join(tmpdir(), 'ar-cam-'));

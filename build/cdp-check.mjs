@@ -7,7 +7,7 @@
  * Prints PASS/FAIL per step plus every console error / uncaught exception.
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -96,6 +96,24 @@ async function main() {
   await send('Runtime.enable');
   await send('Log.enable');
   await send('Page.enable');
+
+  /* --spy-gum records the constraints the page hands to getUserMedia
+     (installed before any page script runs) */
+  if (process.argv.includes('--spy-gum')) {
+    await send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(function(){
+        var md = navigator.mediaDevices;
+        if (!md || !md.getUserMedia) return;
+        var orig = md.getUserMedia.bind(md);
+        window.__gum = [];
+        md.getUserMedia = function(c){
+          try { window.__gum.push(JSON.parse(JSON.stringify(c || null))); } catch (e) {}
+          return orig(c);
+        };
+      })();`
+    });
+  }
+
   await send('Page.navigate', { url });
   await sleep(2500);
 
@@ -105,6 +123,12 @@ async function main() {
   for (const step of steps) {
     if (step.waitMs) await sleep(step.waitMs);
     try {
+      if (step.screenshot) {
+        const shot = await send('Page.captureScreenshot', { format: 'png' });
+        writeFileSync(step.screenshot, Buffer.from(shot.data, 'base64'));
+        console.log('PASS  ' + step.name + '  ->  saved ' + step.screenshot);
+        continue;
+      }
       if (step.click) {
         const c = await send('Runtime.evaluate', {
           expression: '(()=>{const e=document.querySelector(' + JSON.stringify(step.click) +

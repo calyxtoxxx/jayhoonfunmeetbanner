@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#04060c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="description" content="Scan the banner and the film plays on top of it.">
+<meta name="description" content="Point your camera at the artwork and the film plays on top of it.">
 <link rel="icon" href="data:,">
-<title>AR Experience</title>
+<title>AR</title>
 
 <!-- Library scripts must load in the head: A-Frame upgrades <a-scene> the moment it
      is defined, so all core systems and components have to be registered by then. -->
@@ -16,35 +16,23 @@
 <script src="./vendor/mindar-image-aframe.prod.js"></script>
 
 <style>
-  :root{--cyan:#22e0ff;--mag:#ff2fb9;--ink:#04060c;--mono:ui-monospace,Consolas,"SF Mono",Menlo,monospace}
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--ink);color:#eaf6ff;overflow:hidden;
-            font-family:"Segoe UI",Roboto,-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}
+  :root{--cyan:#22e0ff;--ink:#04060c;--mono:ui-monospace,Consolas,"SF Mono",Menlo,monospace}
+
+  /* IMPORTANT: the dark page colour goes on <html> only.
+     MindAR's camera <video> is drawn at z-index:-2, and a background on <body> would paint
+     over it (in-flow block background paints above negative z-index children) -> black
+     screen until the artwork is found. Keeping <body> transparent shows the camera. */
+  html{background:var(--ink)}
+  body{margin:0;height:100%;background:transparent;color:#eaf6ff;overflow:hidden;
+       font-family:"Segoe UI",Roboto,-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}
   .hidden{display:none !important}
 
-  /* the film lives off-screen: it must stay renderable for the video texture,
-     but never take up space or paint over the AR view */
+  /* the film stays off-screen: renderable for the 3D texture, invisible to the user */
   #media{position:fixed;left:-20px;top:-20px;width:2px;height:2px;overflow:hidden;opacity:0;pointer-events:none}
 
-  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
-          justify-content:center;text-align:center;padding:26px;gap:20px}
-
-  /* 1. start (one tap: camera permission + audio unlock) */
-  #start{z-index:30;background:
-      radial-gradient(120% 80% at 18% 0%, rgba(34,224,255,.18), transparent 60%),
-      radial-gradient(120% 80% at 88% 8%, rgba(255,47,185,.16), transparent 60%),
-      linear-gradient(180deg,#04060c,#0a1020 60%,#04060c)}
-  #start h1{margin:0;font-size:clamp(30px,9vw,54px);line-height:1;font-weight:800;letter-spacing:.02em;
-            text-transform:uppercase;background:linear-gradient(92deg,#fff,#22e0ff 45%,#ff2fb9);
-            -webkit-background-clip:text;background-clip:text;color:transparent}
-  #start p{margin:0;max-width:23rem;color:#a9c3d8;font-size:15px;line-height:1.6}
-  #startBtn{appearance:none;border:0;cursor:pointer;color:#02121a;font:700 15px/1 var(--mono);
-            letter-spacing:.2em;text-transform:uppercase;padding:18px 36px;border-radius:999px;
-            background:linear-gradient(92deg,#22e0ff,#7ef0ff 40%,#ff2fb9);
-            box-shadow:0 12px 40px rgba(34,224,255,.35)}
-
-  /* 2. scanning prompt (MindAR shows/hides this via the `hidden` class) */
-  #scan{z-index:15;pointer-events:none}
+  /* "point your camera at the artwork" prompt (MindAR shows/hides it) */
+  #scan{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;gap:22px;pointer-events:none;padding:26px;text-align:center}
   #scan .frame{position:relative;width:min(72vw,300px);aspect-ratio:1/1}
   #scan .frame i{position:absolute;width:34px;height:34px;border:2px solid var(--cyan);
                  filter:drop-shadow(0 0 10px rgba(34,224,255,.7))}
@@ -52,42 +40,40 @@
   #scan .frame i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-top-right-radius:8px}
   #scan .frame i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-bottom-left-radius:8px}
   #scan .frame i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-bottom-right-radius:8px}
-  #scan p{margin:0;font:600 12px/1.6 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:#bfe9ff}
+  #scan p{margin:0;font:600 12px/1.6 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:#bfe9ff;
+          text-shadow:0 2px 12px #000}
 
-  /* errors: a line of text, nothing else */
-  #error{z-index:40;background:rgba(4,6,12,.94)}
+  /* only ever shown if the browser refuses to open the camera without a tap */
+  #retry{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;cursor:pointer;
+         border:0;border-radius:999px;padding:18px 32px;color:#02121a;background:#22e0ff;
+         font:700 14px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase}
+
+  #error{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+         background:rgba(4,6,12,.94);padding:26px;text-align:center}
   #error p{margin:0;max-width:24rem;color:#cfe6f6;font-size:15px;line-height:1.6}
 </style>
 </head>
 <body>
 
-<!-- the film (off-screen, see #media above) -->
+<!-- the film (off-screen, feeds the 3D texture) -->
 <div id="media">
-  <video id="arVideo" src="./assets/video.mp4" preload="none"
+  <video id="arVideo" src="./assets/video.mp4" preload="auto"
          playsinline webkit-playsinline muted loop></video>
 </div>
 
-<!-- step 1: one tap to open the camera -->
-<div id="start" class="screen">
-  <h1>AR Exhibit</h1>
-  <p>Point your camera at the artwork and the film plays on top of it.</p>
-  <button id="startBtn">Start</button>
-</div>
-
-<!-- step 2: where to aim (MindAR's uiScanning slot) -->
-<div id="scan" class="screen hidden">
+<div id="scan" class="hidden">
   <div class="frame"><i></i><i></i><i></i><i></i></div>
   <p>Point your camera at the artwork</p>
 </div>
 
-<!-- errors -->
-<div id="error" class="screen hidden"><p id="errorText"></p></div>
+<button id="retry" class="hidden">Tap to open the camera</button>
 
-<!-- step 3: the film, anchored to the tracked artwork -->
+<div id="error" class="hidden"><p id="errorText"></p></div>
+
 <a-scene id="scene"
          mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart: false; uiLoading: no; uiScanning: #scan; uiError: no; maxTrack: 1; missTolerance: 6; warmupTolerance: 4; filterMinCF: 0.0001; filterBeta: 0.01;"
          color-space="sRGB"
-         renderer="antialias: true; colorManagement: true"
+         renderer="alpha: true; antialias: true; colorManagement: true"
          xr-mode-ui="enabled: false"
          device-orientation-permission-ui="enabled: false"
          loading-screen="enabled: false">
@@ -96,10 +82,8 @@
 
   <a-entity id="anchor" mindar-image-target="targetIndex: 0">
     <a-entity id="group" scale="0.001 0.001 0.001">
-      <!-- glow edge, sized to the artwork (3120 x 1110) -->
       <a-plane position="0 0 -0.004" width="1.05" height="0.3736"
                material="color: #22e0ff; shader: flat; transparent: true; opacity: 0.35; side: double"></a-plane>
-      <!-- the film itself -->
       <a-video id="film" src="#arVideo" position="0 0 0.004" width="1" height="0.3558"></a-video>
     </a-entity>
   </a-entity>
@@ -113,69 +97,113 @@
   var anchor  = document.querySelector('#anchor');
   var group   = document.querySelector('#group');
   var video   = document.querySelector('#arVideo');
-  var start   = document.querySelector('#start');
-  var scan    = document.querySelector('#scan');
+  var retry   = document.querySelector('#retry');
   var error   = document.querySelector('#error');
   var errorTx = document.querySelector('#errorText');
   var ready   = false;
+  var opened  = false;
   var timer   = null;
+
+  function system() { return scene.systems && scene.systems['mindar-image-system']; }
+
+  /* ---- sharper camera than MindAR's default -------------------------------
+     MindAR asks for {facingMode:'environment'} with no size, and phones then hand back a
+     low-res stream (typically 640x480). Wrap getUserMedia and ask for 1080p @30fps; the
+     browser quietly falls back to whatever the device supports. */
+  (function () {
+    var md = navigator.mediaDevices;
+    if (!md || !md.getUserMedia) return;
+    var original = md.getUserMedia.bind(md);
+    md.getUserMedia = function (constraints) {
+      var v = constraints && constraints.video;
+      if (v && typeof v === 'object') {
+        if (!v.width)     v.width     = { ideal: 1920 };
+        if (!v.height)    v.height    = { ideal: 1080 };
+        if (!v.frameRate) v.frameRate = { ideal: 30 };
+      }
+      return original(constraints);
+    };
+  })();
 
   function fail(message) {
     errorTx.textContent = message;
     error.classList.remove('hidden');
-    scan.classList.add('hidden');
   }
 
-  /* ---- start: the single tap that opens the camera ------------------- */
-  document.querySelector('#startBtn').addEventListener('click', function () {
-    start.classList.add('hidden');
+  function needsTap() { retry.classList.remove('hidden'); }
 
-    /* load the film and unlock playback while we still have the tap
-       (iOS only allows later playback for an element that has played once) */
-    video.load();
-    var priming = video.play();
-    if (priming && priming.then) {
-      priming.then(function () { video.pause(); video.currentTime = 0; }).catch(function () {});
-    }
+  /* ---- open the camera straight away ------------------------------------- */
+  function openCamera() {
+    if (opened) return;
+    var s = system();
+    if (!s) return;
+    opened = true;
+    retry.classList.add('hidden');
 
+    video.load();                        /* start buffering the film immediately */
     try {
-      scene.systems['mindar-image-system'].start();
+      s.start();
     } catch (e) {
-      fail('AR could not start: ' + e.message);
+      fail('Camera could not start: ' + e.message);
       return;
     }
-    timer = setTimeout(function () {
-      if (!ready) fail('The camera could not start. Allow camera access for this site (padlock icon) and serve the page over https:// or localhost.');
-    }, 12000);
-  });
+    clearTimeout(timer);
+    timer = setTimeout(function () { if (!ready) needsTap(); }, 8000);
+  }
+
+  /* A-Frame finishes building the scene (and MindAR gets its config) shortly after load,
+     so wait for that instead of a user gesture. */
+  (function boot() {
+    var s = system();
+    if (s && s.imageTargetSrc) openCamera();
+    else setTimeout(boot, 100);
+  })();
 
   scene.addEventListener('arReady', function () { ready = true; clearTimeout(timer); });
   scene.addEventListener('arError', function () {
     clearTimeout(timer);
-    fail('Camera access was blocked. Allow the camera for this site and reload.');
+    opened = false;
+    needsTap();
   });
 
-  /* ---- artwork found: play the film on it ---------------------------- */
+  /* some browsers (older iOS) refuse the camera without a gesture: offer one tap */
+  retry.addEventListener('click', function () {
+    error.classList.add('hidden');
+    retry.classList.add('hidden');
+    opened = false;
+    try { system().stop(); } catch (e) {}
+    setTimeout(openCamera, 150);
+  });
+
+  /* ---- artwork found: play the film on it -------------------------------- */
   anchor.addEventListener('targetFound', function () {
     group.removeAttribute('animation__pop');
     group.setAttribute('animation__pop', {
       property: 'scale', from: '0.6 0.6 0.6', to: '1 1 1', dur: 420, easing: 'easeOutBack'
     });
-
-    video.muted = false;                 /* with sound when the browser allows it... */
+    video.muted = false;                          /* with sound when allowed... */
     var p = video.play();
     if (p && p.catch) {
-      p.catch(function () {              /* ...otherwise play silently */
+      p.catch(function () {                       /* ...silently otherwise */
         video.muted = true;
         video.play().catch(function () {});
       });
     }
   });
 
-  /* ---- artwork lost: hold the film where it is ----------------------- */
-  anchor.addEventListener('targetLost', function () {
-    video.pause();
-  });
+  anchor.addEventListener('targetLost', function () { video.pause(); });
+
+  /* First touch anywhere turns the sound on (autoplay starts muted on phones). */
+  function unmute() {
+    document.removeEventListener('touchstart', unmute);
+    document.removeEventListener('click', unmute);
+    if (!video.muted) return;
+    video.muted = false;
+    var p = video.play();
+    if (p && p.catch) p.catch(function () {});
+  }
+  document.addEventListener('touchstart', unmute);
+  document.addEventListener('click', unmute);
 })();
 </script>
 </body>
