@@ -35,14 +35,41 @@ The site is 100 % static — upload the runtime folders to any HTTPS host:
 | --- | --- |
 | `index.html`, `assets/`, `vendor/` | `build/`, `tools/`, `banner/` |
 
-> **Live copy of this project:** <https://calyxtoxxx.github.io/jayhoonfunmeetbanner/>
-> (GitHub Pages serves the repo root over HTTPS, and `banner/qr.png` already points at it.)
-
 Any of these work in a minute:
 
 * **Netlify Drop** – drag the whole folder onto <https://app.netlify.com/drop>
 * **Cloudflare Pages / Vercel / GitHub Pages** – point it at the repo, no build command
 * **Your own server** – just serve the folder over HTTPS (`npx serve`, nginx, …)
+
+### Already deployed
+
+| Host | URL | How it updates |
+| --- | --- | --- |
+| **GitHub Pages** | https://calyxtoxxx.github.io/jayhoonfunmeetbanner/ | automatically, on every push to `main` |
+| **Cloudflare Pages** | https://jayhoonfunmeetbanner.pages.dev/ | direct upload — re-run `tools/deploy-cloudflare.ps1` after changes |
+
+Both serve the same folder over HTTPS, so the camera works on either. `banner/qr.png` points at
+the URL in step 2 (currently GitHub Pages) — re-run step 2 to switch hosts.
+
+**Cloudflare Pages, the reliable way.** `tools/deploy-cloudflare.ps1` uploads the folder
+directly, which bypasses the Git integration:
+
+```powershell
+npx wrangler login          # once, interactive
+.\tools\deploy-cloudflare.ps1
+# or headless: set $env:CLOUDFLARE_API_TOKEN (Pages:Edit) and $env:CLOUDFLARE_ACCOUNT_ID first
+```
+
+If you would rather have Cloudflare build from Git, the settings for this repo are:
+framework preset **None**, build command **(empty)**, build output directory **/**,
+production branch **main**. The dashboard message *"No deployment available"* means Cloudflare
+has a project but has never produced a build — usually because the Cloudflare GitHub App was not
+granted access to this repository, the production branch does not match `main`, or a build
+command/output directory was set that produces nothing.
+
+Want a custom domain? Cloudflare dashboard → Workers & Pages → `jayhoonfunmeetbanner` →
+**Custom domains** (e.g. `banner.jayhoonworlds.com`), then re-run
+`node tools/setup-site.js https://banner.jayhoonworlds.com/` and re-print the poster.
 
 > **HTTPS is mandatory.** Browsers only expose the camera in a *secure context*
 > (`https://…` or `http://localhost`). On plain `http://192.168.x.x` the page will show a
@@ -240,6 +267,7 @@ tools/
   serve.js                 zero-dependency dev server (range requests, optional --https)
   setup-site.js            regenerate QR + banner for a URL (no dependencies)
   make-qr.js               bundled QR encoder + minimal PNG/SVG writer
+  deploy-cloudflare.ps1    direct-upload deploy to Cloudflare Pages
 build/
   verify.mjs               one-command verification (see above)
   cdp-check.mjs            headless-Chrome/CDP test harness
