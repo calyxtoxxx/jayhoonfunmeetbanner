@@ -6,268 +6,101 @@
 <meta name="theme-color" content="#04060c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="description" content="Augmented reality experience: scan the artwork and watch the film play on top of it.">
+<meta name="description" content="Scan the banner and the film plays on top of it.">
 <link rel="icon" href="data:,">
 <title>AR Experience</title>
-<!-- Libraries load in the head: A-Frame upgrades <a-scene> the moment it is defined,
-     so all core systems and components must already be registered by then. -->
+
+<!-- Library scripts must load in the head: A-Frame upgrades <a-scene> the moment it
+     is defined, so all core systems and components have to be registered by then. -->
 <script src="./vendor/aframe-v1.5.0.min.js"></script>
-<script src="./vendor/mindar-image-aframe.prod.js"></script><style>
-  :root{
-    --cyan:#22e0ff;
-    --mag:#ff2fb9;
-    --lime:#8cff5a;
-    --ink:#04060c;
-    --glass:rgba(10,16,28,.62);
-    --stroke:rgba(120,220,255,.35);
-    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Roboto Mono",monospace;
-    --sans:"Segoe UI",Roboto,-apple-system,BlinkMacSystemFont,Inter,Helvetica,Arial,sans-serif;
-  }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{
-    margin:0;height:100%;background:var(--ink);color:#e9f7ff;
-    font-family:var(--sans);overflow:hidden;overscroll-behavior:none;
-  }
-  a{color:var(--cyan)}
+<script src="./vendor/mindar-image-aframe.prod.js"></script>
+
+<style>
+  :root{--cyan:#22e0ff;--mag:#ff2fb9;--ink:#04060c;--mono:ui-monospace,Consolas,"SF Mono",Menlo,monospace}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--ink);color:#eaf6ff;overflow:hidden;
+            font-family:"Segoe UI",Roboto,-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}
   .hidden{display:none !important}
 
-  /* ---------- off-screen media: must exist & stay "renderable" for video textures,
-               but never take up space or paint over the AR view ---------- */
+  /* the film lives off-screen: it must stay renderable for the video texture,
+     but never take up space or paint over the AR view */
   #media{position:fixed;left:-20px;top:-20px;width:2px;height:2px;overflow:hidden;opacity:0;pointer-events:none}
 
-  /* ---------- A-Frame canvas (already fixed/fullscreen) sits behind the UI ---------- */
-  a-scene{position:fixed;inset:0}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+          justify-content:center;text-align:center;padding:26px;gap:20px}
 
-  /* ---------- generic overlay ---------- */
-  .ui{
-    position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;text-align:center;
-    padding:calc(env(safe-area-inset-top) + 18px) 22px calc(env(safe-area-inset-bottom) + 18px);
-  }
-  .ui.dim{background:radial-gradient(120% 90% at 50% 0%,rgba(12,22,40,.86),rgba(2,4,10,.94))}
+  /* 1. start (one tap: camera permission + audio unlock) */
+  #start{z-index:30;background:
+      radial-gradient(120% 80% at 18% 0%, rgba(34,224,255,.18), transparent 60%),
+      radial-gradient(120% 80% at 88% 8%, rgba(255,47,185,.16), transparent 60%),
+      linear-gradient(180deg,#04060c,#0a1020 60%,#04060c)}
+  #start h1{margin:0;font-size:clamp(30px,9vw,54px);line-height:1;font-weight:800;letter-spacing:.02em;
+            text-transform:uppercase;background:linear-gradient(92deg,#fff,#22e0ff 45%,#ff2fb9);
+            -webkit-background-clip:text;background-clip:text;color:transparent}
+  #start p{margin:0;max-width:23rem;color:#a9c3d8;font-size:15px;line-height:1.6}
+  #startBtn{appearance:none;border:0;cursor:pointer;color:#02121a;font:700 15px/1 var(--mono);
+            letter-spacing:.2em;text-transform:uppercase;padding:18px 36px;border-radius:999px;
+            background:linear-gradient(92deg,#22e0ff,#7ef0ff 40%,#ff2fb9);
+            box-shadow:0 12px 40px rgba(34,224,255,.35)}
 
-  /* ---------- splash / start ---------- */
-  #splash{
-    background:
-      radial-gradient(120% 80% at 15% 0%,rgba(34,224,255,.16),transparent 60%),
-      radial-gradient(120% 80% at 90% 10%,rgba(255,47,185,.16),transparent 60%),
-      linear-gradient(180deg,#04060c,#070b16 60%,#04060c);
-    z-index:50;gap:16px;justify-content:center;
-  }
-  #splash:before{
-    content:"";position:absolute;inset:0;pointer-events:none;
-    background-image:linear-gradient(rgba(120,220,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(120,220,255,.055) 1px,transparent 1px);
-    background-size:46px 46px;
-    mask-image:radial-gradient(70% 60% at 50% 45%,#000 30%,transparent 100%);
-    -webkit-mask-image:radial-gradient(70% 60% at 50% 45%,#000 30%,transparent 100%);
-  }
-  .kicker{
-    font-family:var(--mono);font-size:11px;letter-spacing:.42em;text-transform:uppercase;
-    color:var(--cyan);opacity:.9;margin:0 0 2px
-  }
-  .kicker:before,.kicker:after{content:"-";margin:0 .6em;opacity:.6}
-  #splash h1{
-    margin:6px 0 0;font-size:clamp(30px,10vw,60px);line-height:.98;letter-spacing:.02em;
-    font-weight:800;text-transform:uppercase;
-    background:linear-gradient(92deg,#fff 0%,var(--cyan) 42%,var(--mag) 100%);
-    -webkit-background-clip:text;background-clip:text;color:transparent;
-    filter:drop-shadow(0 0 24px rgba(34,224,255,.28));
-  }
-  #splash .sub{max-width:34rem;margin:10px 0 0;font-size:clamp(13px,3.6vw,16px);line-height:1.55;color:#a9c3d8}
-  .btn{
-    -webkit-appearance:none;appearance:none;border:0;cursor:pointer;
-    font-family:var(--mono);font-size:14px;letter-spacing:.18em;text-transform:uppercase;
-    padding:17px 30px;border-radius:999px;color:#02121a;font-weight:700;
-    background:linear-gradient(92deg,var(--cyan),#7ef0ff 40%,var(--mag));
-    box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 10px 40px rgba(34,224,255,.35);
-    transition:transform .16s ease,box-shadow .2s ease;
-  }
-  .btn:active{transform:scale(.97)}
-  .btn.ghost{
-    background:transparent;color:#dff2ff;font-weight:600;
-    box-shadow:0 0 0 1px var(--stroke) inset;padding:13px 22px;font-size:12px;
-  }
-  #startBtn{margin-top:20px}
-  .fineprint{margin-top:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:#6f8aa1;text-transform:uppercase;line-height:1.8}
-  #splash .stack{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:16px}
-  .warn{
-    display:none;max-width:32rem;margin-top:14px;padding:11px 14px;border-radius:12px;
-    font-family:var(--mono);font-size:11px;line-height:1.6;letter-spacing:.04em;
-    color:#ffd9a8;background:rgba(255,170,60,.1);box-shadow:0 0 0 1px rgba(255,190,90,.35) inset
-  }
-  .warn.show{display:block}
+  /* 2. scanning prompt (MindAR shows/hides this via the `hidden` class) */
+  #scan{z-index:15;pointer-events:none}
+  #scan .frame{position:relative;width:min(72vw,300px);aspect-ratio:1/1}
+  #scan .frame i{position:absolute;width:34px;height:34px;border:2px solid var(--cyan);
+                 filter:drop-shadow(0 0 10px rgba(34,224,255,.7))}
+  #scan .frame i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-top-left-radius:8px}
+  #scan .frame i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-top-right-radius:8px}
+  #scan .frame i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-bottom-left-radius:8px}
+  #scan .frame i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-bottom-right-radius:8px}
+  #scan p{margin:0;font:600 12px/1.6 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:#bfe9ff}
 
-  /* ---------- loading ---------- */
-  #ar-loading{background:rgba(4,6,12,.86);gap:18px}
-  .spinner{
-    width:54px;height:54px;border-radius:50%;
-    border:3px solid rgba(120,220,255,.18);border-top-color:var(--cyan);
-    animation:spin 1s linear infinite
-  }
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .mono{font-family:var(--mono);letter-spacing:.3em;text-transform:uppercase;font-size:11.5px}
-
-  /* ---------- scanning / reticle ---------- */
-  #ar-scanning{pointer-events:none;justify-content:center}
-  .brackets{position:relative;width:min(74vw,320px);aspect-ratio:1/1}
-  .brackets i{
-    position:absolute;width:34px;height:34px;border:2px solid var(--cyan);
-    filter:drop-shadow(0 0 10px rgba(34,224,255,.7))
-  }
-  .brackets i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-top-left-radius:8px}
-  .brackets i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-top-right-radius:8px}
-  .brackets i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-bottom-left-radius:8px}
-  .brackets i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-bottom-right-radius:8px}
-  .scanline{
-    position:absolute;left:4%;right:4%;height:2px;border-radius:2px;
-    background:linear-gradient(90deg,transparent,var(--cyan),transparent);
-    box-shadow:0 0 18px 3px rgba(34,224,255,.55);
-    animation:scan 2.6s cubic-bezier(.4,0,.6,1) infinite
-  }
-  @keyframes scan{0%{top:2%;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:96%;opacity:0}}
-  #ar-scanning p{margin:22px 0 0}
-
-  /* ---------- error / fallback ---------- */
-  #ar-error{background:rgba(4,6,12,.9);z-index:36}
-  #ar-error .card{
-    max-width:30rem;padding:26px 22px;border-radius:20px;
-    background:var(--glass);box-shadow:0 0 0 1px var(--stroke) inset,0 20px 60px rgba(0,0,0,.5);
-    backdrop-filter:blur(14px)
-  }
-  #ar-error h2{margin:0 0 8px;font-size:20px;letter-spacing:.04em;text-transform:uppercase}
-  #ar-error p{margin:0 0 18px;color:#a9c3d8;font-size:14px;line-height:1.6}
-
-  /* ---------- HUD ---------- */
-  #hud{position:fixed;inset:0;z-index:26;pointer-events:none;display:none}
-  #hud.on{display:block}
-  #hud .bar{
-    position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:12px;right:12px;
-    display:flex;align-items:center;gap:10px
-  }
-  .chip{
-    pointer-events:auto;display:inline-flex;align-items:center;gap:8px;
-    font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;
-    padding:9px 13px;border-radius:999px;background:var(--glass);color:#dff2ff;
-    box-shadow:0 0 0 1px var(--stroke) inset;backdrop-filter:blur(12px)
-  }
-  .dot{width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 10px var(--lime);animation:pulse 1.6s ease-in-out infinite}
-  @keyframes pulse{50%{opacity:.35}}
-  .spacer{flex:1}
-  button.chip{cursor:pointer;border:0}
-  button.chip[aria-pressed="true"]{color:#02121a;background:linear-gradient(92deg,var(--cyan),#9df)} 
-  #hud .foot{
-    position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 14px);
-    text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;
-    text-transform:uppercase;color:#9fbed4;text-shadow:0 2px 12px #000
-  }
-
-  /* ---------- no-AR player ---------- */
-  #player{
-    position:fixed;inset:0;z-index:60;display:none;background:#000;
-    align-items:center;justify-content:center
-  }
-  #player.on{display:flex}
-  #player video{width:100%;height:100%;object-fit:contain;background:#000}
-  #player .close{position:absolute;top:calc(env(safe-area-inset-top) + 12px);right:12px}
-
-  /* ---------- cosmetic AR grain / vignette ---------- */
-  #grade{
-    position:fixed;inset:0;z-index:24;pointer-events:none;opacity:.5;mix-blend-mode:screen;
-    background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);
-    display:none
-  }
-  #grade.on{display:block}
-  @media (min-width:900px){ .ui{padding:32px} }
+  /* errors: a line of text, nothing else */
+  #error{z-index:40;background:rgba(4,6,12,.94)}
+  #error p{margin:0;max-width:24rem;color:#cfe6f6;font-size:15px;line-height:1.6}
 </style>
 </head>
 <body>
-<!-- Off-screen film element. It is deliberately NOT inside <a-assets>: an asset
-     element without a usable src stalls A-Frame's loader (and therefore the whole
-     scene: camera, components, systems). The src is chosen at launch instead. -->
-<div id="media" aria-hidden="true">
-  <video id="arVideo" src="./assets/video-720.mp4" preload="none" playsinline webkit-playsinline muted loop></video>
+
+<!-- the film (off-screen, see #media above) -->
+<div id="media">
+  <video id="arVideo" src="./assets/video.mp4" preload="none"
+         playsinline webkit-playsinline muted loop></video>
 </div>
 
-<!-- -- SPLASH (needs a tap: camera permission + audio unlock) ------------- -->
-<div id="splash" class="ui">
-  <p class="kicker">Augmented Reality</p>
-  <h1>AR&nbsp;Exhibit</h1>
-  <p class="sub">Point your phone at the banner. The artwork you scan comes alive - a film plays, frozen in place, floating in the room.</p>
-  <button id="startBtn" class="btn">Launch AR</button>
-  <div class="stack">
-    <button id="watchBtn" class="btn ghost">Watch without AR</button>
-  </div>
-  <p class="fineprint">Camera stays on your device - nothing is recorded or uploaded</p>
-  <div id="insecureWarn" class="warn"></div>
+<!-- step 1: one tap to open the camera -->
+<div id="start" class="screen">
+  <h1>AR Exhibit</h1>
+  <p>Point your camera at the artwork and the film plays on top of it.</p>
+  <button id="startBtn">Start</button>
 </div>
 
-<!-- -- MINDAR UI HOOKS ---------------------------------------------------- -->
-<div id="ar-loading" class="ui mindar-ui-overlay dim hidden">
-  <div class="spinner"></div>
-  <p class="mono">Initialising AR engine</p>
+<!-- step 2: where to aim (MindAR's uiScanning slot) -->
+<div id="scan" class="screen hidden">
+  <div class="frame"><i></i><i></i><i></i><i></i></div>
+  <p>Point your camera at the artwork</p>
 </div>
 
-<div id="ar-scanning" class="ui mindar-ui-overlay hidden">
-  <div class="brackets">
-    <i></i><i></i><i></i><i></i>
-    <div class="scanline"></div>
-  </div>
-  <p class="mono">Point your camera at the artwork</p>
-</div>
+<!-- errors -->
+<div id="error" class="screen hidden"><p id="errorText"></p></div>
 
-<div id="ar-error" class="ui mindar-ui-overlay hidden">
-  <div class="card">
-    <h2>Camera unavailable</h2>
-    <p id="errMsg">This browser blocked or does not support camera access. You can still watch the film below.</p>
-    <div class="stack" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <button id="retryBtn" class="btn">Try again</button>
-      <button id="watchBtn2" class="btn ghost">Watch without AR</button>
-    </div>
-  </div>
-</div>
-
-<!-- -- HUD shown while tracking ------------------------------------------- -->
-<div id="hud">
-  <div class="bar">
-    <span class="chip"><span class="dot"></span><span id="hudState">AR active</span></span>
-    <span class="spacer"></span>
-    <button id="soundBtn" class="chip" aria-pressed="false">&#128266; Sound off</button>
-    <button id="fsBtn" class="chip">&#9974; Full</button>
-    <button id="stopBtn" class="chip">&#10005;</button>
-  </div>
-  <div class="foot" id="hudFoot">Artwork locked &middot; film playing</div>
-</div>
-
-<div id="grade"></div>
-
-<!-- -- NO-AR VIDEO PLAYER ------------------------------------------------- -->
-<div id="player">
-  <video id="playerVideo" playsinline controls preload="metadata"></video>
-  <button id="closePlayer" class="chip close">&#10005; Close</button>
-</div>
-
-<!-- -- AR SCENE ----------------------------------------------------------- -->
+<!-- step 3: the film, anchored to the tracked artwork -->
 <a-scene id="scene"
-         mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart: false; uiLoading: #ar-loading; uiScanning: #ar-scanning; uiError: #ar-error; maxTrack: 1; missTolerance: 6; warmupTolerance: 4; filterMinCF: 0.0001; filterBeta: 0.01;"
+         mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart: false; uiLoading: no; uiScanning: #scan; uiError: no; maxTrack: 1; missTolerance: 6; warmupTolerance: 4; filterMinCF: 0.0001; filterBeta: 0.01;"
          color-space="sRGB"
-         renderer="antialias: true; colorManagement: true; physicallyCorrectLights: false"
-         vr-mode-ui="enabled: false"
+         renderer="antialias: true; colorManagement: true"
+         xr-mode-ui="enabled: false"
          device-orientation-permission-ui="enabled: false"
          loading-screen="enabled: false">
 
-
   <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-  <a-entity id="arTarget" mindar-image-target="targetIndex: 0">
-    <a-entity id="arGroup" scale="0.001 0.001 0.001">
-      <!-- glow frame -->
-      <a-plane id="arFrame" position="0 0 -0.004" width="1.06" height="0.377"
-               material="color: #22e0ff; shader: flat; transparent: true; opacity: 0.32; side: double"
-               animation="property: material.opacity; from: 0.16; to: 0.48; dur: 1500; dir: alternate; loop: true; easing: easeInOutSine"></a-plane>
-      <!-- the film itself, sized to the printed artwork (3120 x 1110) -->
-      <a-entity id="arPlane">
-        <a-video id="arVideoPlane" src="#arVideo" position="0 0 0.004" width="1" height="0.3558"></a-video>
-      </a-entity>
+  <a-entity id="anchor" mindar-image-target="targetIndex: 0">
+    <a-entity id="group" scale="0.001 0.001 0.001">
+      <!-- glow edge, sized to the artwork (3120 x 1110) -->
+      <a-plane position="0 0 -0.004" width="1.05" height="0.3736"
+               material="color: #22e0ff; shader: flat; transparent: true; opacity: 0.35; side: double"></a-plane>
+      <!-- the film itself -->
+      <a-video id="film" src="#arVideo" position="0 0 0.004" width="1" height="0.3558"></a-video>
     </a-entity>
   </a-entity>
 </a-scene>
@@ -276,297 +109,74 @@
 (function () {
   'use strict';
 
-  /* ------------------------- config ------------------------- */
-  var TARGET_ASPECT = 1110 / 3120;   // printed artwork aspect (w:3120 h:1110)
-  var SRC_HD = './assets/video-1080.mp4';
-  var SRC_SD = './assets/video-720.mp4';
+  var scene   = document.querySelector('#scene');
+  var anchor  = document.querySelector('#anchor');
+  var group   = document.querySelector('#group');
+  var video   = document.querySelector('#arVideo');
+  var start   = document.querySelector('#start');
+  var scan    = document.querySelector('#scan');
+  var error   = document.querySelector('#error');
+  var errorTx = document.querySelector('#errorText');
+  var ready   = false;
+  var timer   = null;
 
-  /* optional debug switches: ?rot=180 (in-plane), ?flipy=1, ?flipx=1 */
-  var params = new URLSearchParams(location.search);
-
-  var $ = function (sel) { return document.querySelector(sel); };
-  var splash = $('#splash');
-  var startBtn = $('#startBtn');
-  var insecureWarn = $('#insecureWarn');
-  var hud = $('#hud');
-  var grade = $('#grade');
-  var hudState = $('#hudState');
-  var hudFoot = $('#hudFoot');
-  var soundBtn = $('#soundBtn');
-  var fsBtn = $('#fsBtn');
-  var stopBtn = $('#stopBtn');
-  var errorBox = $('#ar-error');
-  var errMsg = $('#errMsg');
-  var player = $('#player');
-  var playerVideo = $('#playerVideo');
-
-  var scene = $('#scene');
-  var arVideo = $('#arVideo');
-  var arTarget = $('#arTarget');
-  var arGroup = $('#arGroup');
-  var arVideoPlane = $('#arVideoPlane');
-
-  var started = false;
-  var soundOn = false;
-  var lostTimer = null;
-  var planeFitted = false;
-
-  /* ------------------------- helpers ------------------------- */
-  function pickSource() {
-    /* ?q=hd forces the big file (kiosks / fast wifi), ?q=sd forces the small one */
-    var forced = (params.get('q') || '').toLowerCase();
-    if (forced === 'hd' || forced === 'high') return SRC_HD;
-    if (forced === 'sd' || forced === 'low') return SRC_SD;
-
-    var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
-    var slow = c.saveData === true || /(^|-)2g$|(^|-)3g$/.test(c.effectiveType || '');
-    var small = Math.min(window.screen.width, window.screen.height) < 820;
-    var touch = matchMedia('(pointer: coarse)').matches;
-    return (slow || small || touch) ? SRC_SD : SRC_HD;
+  function fail(message) {
+    errorTx.textContent = message;
+    error.classList.remove('hidden');
+    scan.classList.add('hidden');
   }
 
-  function isSecure() {
-    return window.isSecureContext || location.protocol === 'https:' ||
-           location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  }
+  /* ---- start: the single tap that opens the camera ------------------- */
+  document.querySelector('#startBtn').addEventListener('click', function () {
+    start.classList.add('hidden');
 
-  function showError(msg) {
-    errMsg.textContent = msg;
-    errorBox.classList.remove('hidden');
-  }
-
-  function fitPlane() {
-    if (planeFitted) return;
-    var w = arVideo.videoWidth, h = arVideo.videoHeight;
-    if (!w || !h) return;
-    /* artwork defines the footprint; video shares its aspect, so cover it */
-    var targetAspect = TARGET_ASPECT;
-    var videoAspect = h / w;
-    var height = (targetAspect * 0.995 < videoAspect) ? targetAspect : videoAspect;
-    arVideoPlane.setAttribute('height', height);
-    planeFitted = true;
-  }
-
-  function baseScale() {
-    return (params.get('flipx') === '1' ? -1 : 1) + ' ' + (params.get('flipy') === '1' ? -1 : 1) + ' 1';
-  }
-
-  function applyDebugTransforms() {
-    var rot = parseFloat(params.get('rot') || '0');
-    if (rot) { arGroup.setAttribute('rotation', '0 0 ' + rot); }
-    arGroup.setAttribute('scale', baseScale());
-  }
-
-  function popIn() {
-    arGroup.removeAttribute('animation__pop');
-    arGroup.setAttribute('animation__pop', {
-      property: 'scale',
-      from: '0.35 0.35 0.35',
-      to: baseScale(),
-      dur: 460,
-      easing: 'easeOutBack'
-    });
-  }
-
-  function playFilm() {
-    var p = arVideo.play();
-    if (p && p.catch) { p.catch(function () { /* muted autoplay should always pass */ }); }
-    hudState.textContent = 'AR active';
-    hudFoot.textContent = 'Artwork locked - film playing';
-  }
-
-  function pauseFilm(reason) {
-    try { arVideo.pause(); } catch (e) {}
-    hudState.textContent = 'Searching';
-    hudFoot.textContent = reason || 'Move back to the artwork';
-  }
-
-  /* ------------------------- video wiring ------------------------- */
-  arVideo.poster = './assets/poster.jpg';
-  arVideo.setAttribute('muted', '');
-  arVideo.playsInline = true;
-  arVideo.addEventListener('loadedmetadata', function () {
-    fitPlane();
-    /* the poster frame is only useful until playback starts */
-    arVideo.poster = '';
-  });
-  arVideo.addEventListener('timeupdate', function () {
-    /* keeps hud honest if the browser pauses us (battery saver etc.) */
-    if (started && !arVideo.paused && arVideo.currentTime > 0.2) {
-      hudFoot.textContent = 'Artwork locked - film playing';
+    /* load the film and unlock playback while we still have the tap
+       (iOS only allows later playback for an element that has played once) */
+    video.load();
+    var priming = video.play();
+    if (priming && priming.then) {
+      priming.then(function () { video.pause(); video.currentTime = 0; }).catch(function () {});
     }
-  });
 
-  /* ------------------------- target events ------------------------- */
-  arTarget.addEventListener('targetFound', function () {
-    if (lostTimer) { clearTimeout(lostTimer); lostTimer = null; }
-    arGroup.setAttribute('visible', 'true');
-    popIn();
-    playFilm();
-    hud.classList.add('on');
-    grade.classList.add('on');
-  });
-
-  arTarget.addEventListener('targetLost', function () {
-    if (lostTimer) clearTimeout(lostTimer);
-    lostTimer = setTimeout(function () {
-      pauseFilm('Move back to the artwork');
-      hud.classList.remove('on');
-      grade.classList.remove('on');
-      lostTimer = null;
-    }, 600);
-  });
-
-  arTarget.addEventListener('targetUpdate', function () {
-    if (lostTimer) { clearTimeout(lostTimer); lostTimer = null; }
-  });
-
-  /* ------------------------- HUD controls ------------------------- */
-  soundBtn.addEventListener('click', function () {
-    soundOn = !soundOn;
-    arVideo.muted = !soundOn;
-    if (soundOn) {
-      arVideo.volume = 1;
-      var p = arVideo.play();
-      if (p && p.catch) p.catch(function () {});
-    }
-    soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
-    soundBtn.innerHTML = soundOn ? '&#128266; Sound on' : '&#128266; Sound off';
-  });
-
-  fsBtn.addEventListener('click', function () {
-    var el = document.documentElement;
-    if (!document.fullscreenElement) {
-      (el.requestFullscreen || el.webkitRequestFullscreen || function () {}).call(el);
-    } else {
-      (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
-    }
-  });
-
-  function hardStop() {
-    try { arVideo.pause(); } catch (e) {}
-    try { scene.systems['mindar-image-system'].stop(); } catch (e) {}
-    hud.classList.remove('on');
-    grade.classList.remove('on');
-    splash.classList.remove('hidden');
-    started = false;
-  }
-  stopBtn.addEventListener('click', hardStop);
-
-  /* ------------------------- no-AR player ------------------------- */
-  function openPlayer() {
-    playerVideo.preload = 'auto';
-    playerVideo.src = pickSource();
-    player.classList.add('on');
-    var p = playerVideo.play();
-    if (p && p.catch) p.catch(function () {});
-  }
-  function closePlayer() {
-    playerVideo.pause();
-    player.classList.remove('on');
-  }
-  document.querySelectorAll('#watchBtn, #watchBtn2').forEach(function (b) {
-    b.addEventListener('click', function () {
-      hideEverything();
-      openPlayer();
-    });
-  });
-  $('#closePlayer').addEventListener('click', closePlayer);
-
-  function hideEverything() {
-    splash.classList.add('hidden');
-    hud.classList.remove('on');
-    grade.classList.remove('on');
-    errorBox.classList.add('hidden');
-  }
-
-  /* ------------------------- boot ------------------------- */
-  if (!isSecure()) {
-    insecureWarn.classList.add('show');
-    insecureWarn.textContent = 'Camera access needs HTTPS (or localhost). Open this page over https:// to use AR - you can still watch the film without AR.';
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    insecureWarn.classList.add('show');
-    insecureWarn.textContent = 'This browser has no camera API. Use a recent Chrome, Safari or Edge build - or watch the film without AR.';
-  }
-
-  var arReadyFired = false;
-  var watchdog = null;
-
-  function arFailed(msg) {
-    if (arReadyFired) return;
-    if (watchdog) { clearTimeout(watchdog); watchdog = null; }
-    showError(msg);
-  }
-
-  scene.addEventListener('arReady', function () {
-    arReadyFired = true;
-    if (watchdog) { clearTimeout(watchdog); watchdog = null; }
-    hideEverything();
-    splash.classList.add('hidden');
-  });
-
-  /* MindAR throws deep inside its engine if WebGL/tf.js cannot start (old device,
-     blocked GPU, no WebGL). Without this the visitor would stare at "initialising". */
-  window.addEventListener('error', function (e) {
-    if (!started || arReadyFired) return;
-    var msg = (e && e.message) || '';
-    if (/webgl|context|undefined/i.test(msg)) {
-      arFailed('The AR engine could not start on this device (graphics unavailable). Try another browser or device - or watch the film without AR.');
-    }
-  });
-
-  scene.addEventListener('arError', function (e) {
-    if (watchdog) { clearTimeout(watchdog); watchdog = null; }
-    var code = (e.detail && e.detail.error) || 'VIDEO_FAIL';
-    showError(code === 'VIDEO_FAIL'
-      ? 'The camera could not be started. Check the browser permission (padlock icon) and that the page is served over https:// or localhost.'
-      : 'AR could not start on this device.');
-  });
-
-  $('#retryBtn').addEventListener('click', function () {
-    errorBox.classList.add('hidden');
-    hardStop();
-  });
-
-  startBtn.addEventListener('click', function () {
-    if (started) return;
-    started = true;
-    hideEverything();
-    $('#grade').classList.add('on');
-    /* arm the film: muted + playsinline is the only combo that reliably autoplays.
-       play() -> pause() while we still have the tap keeps the element "unlocked"
-       on iOS, then the film starts from 0:00 when the artwork is found. */
-    arVideo.src = pickSource();
-    arVideo.preload = 'auto';
-    arVideo.load();
-    applyDebugTransforms();
-    try {
-      var priming = arVideo.play();
-      if (priming && priming.then) {
-        priming.then(function () {
-          arVideo.pause();
-          try { arVideo.currentTime = 0; } catch (e) {}
-        }).catch(function () {});
-      }
-    } catch (e) {}
     try {
       scene.systems['mindar-image-system'].start();
-    } catch (err) {
-      arFailed('AR could not start: ' + err.message);
+    } catch (e) {
+      fail('AR could not start: ' + e.message);
       return;
     }
-    /* If the engine never reports ready we surface the fallback instead of hanging. */
-    if (watchdog) clearTimeout(watchdog);
-    watchdog = setTimeout(function () {
-      arFailed('The AR engine did not start (camera or graphics blocked). You can still watch the film without AR.');
-    }, 15000);
+    timer = setTimeout(function () {
+      if (!ready) fail('The camera could not start. Allow camera access for this site (padlock icon) and serve the page over https:// or localhost.');
+    }, 12000);
   });
 
-  addEventListener('keydown', function (e) { if (e.key === 'Escape') closePlayer(); });
+  scene.addEventListener('arReady', function () { ready = true; clearTimeout(timer); });
+  scene.addEventListener('arError', function () {
+    clearTimeout(timer);
+    fail('Camera access was blocked. Allow the camera for this site and reload.');
+  });
+
+  /* ---- artwork found: play the film on it ---------------------------- */
+  anchor.addEventListener('targetFound', function () {
+    group.removeAttribute('animation__pop');
+    group.setAttribute('animation__pop', {
+      property: 'scale', from: '0.6 0.6 0.6', to: '1 1 1', dur: 420, easing: 'easeOutBack'
+    });
+
+    video.muted = false;                 /* with sound when the browser allows it... */
+    var p = video.play();
+    if (p && p.catch) {
+      p.catch(function () {              /* ...otherwise play silently */
+        video.muted = true;
+        video.play().catch(function () {});
+      });
+    }
+  });
+
+  /* ---- artwork lost: hold the film where it is ----------------------- */
+  anchor.addEventListener('targetLost', function () {
+    video.pause();
+  });
 })();
 </script>
 </body>
 </html>
-
-

@@ -19,11 +19,16 @@ A self-contained, app-free augmented-reality banner.
                           and plays as you walk around it
 ```
 
-* The **QR code** launches the web page. No app to install.
-* The page **recognises the artwork itself** (image tracking, not a black-and-white marker)
-  and plays `assets/video-*.mp4` locked onto the print, in real 3D.
-* Everything runs in the visitor's browser. The camera feed never leaves the device and is
-  never uploaded or recorded.
+The whole visitor flow is three steps:
+
+1. **Scan the QR code** on the printed banner - it opens this page. No app to install.
+2. **Tap Start** and allow the camera; the page asks them to point the phone at the artwork.
+3. **The film plays anchored to the artwork** - tracked in real 3D, so it stays locked to the
+   print and moves exactly with the camera and the hand holding it.
+
+The artwork is recognised by **image tracking** (MindAR + TensorFlow.js in the browser), not by
+a black-and-white marker. Everything runs on the device: the camera feed is never uploaded,
+recorded or stored.
 
 ---
 
@@ -73,7 +78,7 @@ Want a custom domain? Cloudflare dashboard → Workers & Pages → `jayhoonfunme
 
 > **HTTPS is mandatory.** Browsers only expose the camera in a *secure context*
 > (`https://…` or `http://localhost`). On plain `http://192.168.x.x` the page will show a
-> friendly warning and offer the no-AR player instead.
+> friendly warning instead of the camera prompt.
 
 ## 2. Point the banner at your URL
 
@@ -117,38 +122,35 @@ warning you can dismiss — if the camera stays blocked, deploy to a real HTTPS 
 
 ## `index.html` — the AR page
 
+There is deliberately nothing else: no menu, no settings, no fallback player, no quality switch,
+no debug parameters. The page is one file with three screens and one 3D object.
+
 | Piece | What it does |
 | --- | --- |
-| `#splash` | Launch screen. One tap is required: it unlocks audio and starts the camera. |
-| `#ar-loading` / `#ar-scanning` / `#ar-error` | MindAR's UI slots (MindAR toggles their `hidden` class). |
-| `#hud` | Sound toggle, fullscreen, exit. Appears while the artwork is locked. |
-| `#player` | "Watch without AR" fallback player (no camera / no WebGL / in-app browser). |
-| `<a-scene mindar-image>` | The AR engine: `assets/targets.mind` is the compiled artwork. |
-| `#arTarget` → `#arGroup` → `#arVideoPlane` | The film plane, a child of the tracked anchor, so it inherits the artwork pose. |
-| `#grade` | Cosmetic scanline/vignette layer over the AR view. |
+| `#start` | One button. The tap is what the browser needs to open the camera (and to allow sound later). |
+| `#scan` | "Point your camera at the artwork" prompt. MindAR shows it while the artwork is not in view and hides it the moment tracking locks. |
+| `#error` | A single line of text if the camera cannot be opened. |
+| `#arVideo` (`#media`) | The film. It sits off-screen so it can feed the 3D texture without being visible. |
+| `<a-scene mindar-image>` | The AR engine; `assets/targets.mind` is the compiled artwork. |
+| `#anchor` → `#group` → `#film` | The film plane is a child of the tracked anchor, so it inherits the artwork's pose every frame. |
 
-### URL switches
-
-| Parameter | Effect |
-| --- | --- |
-| `?q=sd` / `?q=hd` | Force the 720p (`3.8 MB`) or 1080p (`9.8 MB`) film. Default: SD on phones/slow links, HD on desktop. |
-| `?rot=180` | Rotate the film in-plane (debug). |
-| `?flipy=1` / `?flipx=1` | Mirror the film vertically/horizontally (debug). |
+Sound: playback starts unmuted, and if the browser refuses (autoplay policy) the page silently
+falls back to muted playback instead of adding a sound button.
 
 ### Tuning the tracking
 
 In the `mindar-image` attribute on `<a-scene>`:
 
-* `missTolerance` (default `6`) – frames the target may be missing before it is considered lost.
-* `warmupTolerance` (default `4`) – frames needed before the target is reported as found.
-* `filterMinCF` / `filterBeta` – jitter vs. lag of the pose filter.
-* `maxTrack: 1` – number of simultaneous targets (we compile a single target).
+* `missTolerance` (default `6`) - frames the target may be missing before it counts as lost
+  (raise it if the film flickers off when the phone shakes).
+* `warmupTolerance` (default `4`) - frames needed before the target is reported as found.
+* `filterMinCF` / `filterBeta` - the pose filter: jitter versus lag.
+* `maxTrack: 1` - simultaneous targets (one target is compiled).
 
-Because the film is a child of the anchor, **sizing lives in markup**: `#arVideoPlane`
-uses `width="1" height="0.3558"` (the artwork's aspect, 3120 × 1110). If the artwork changes,
-update `width`/`height` and `TARGET_ASPECT` near the top of the script — or leave
-`TARGET_ASPECT` alone, since `fitPlane()` also reads the real video aspect from metadata.
-`position="0 0 0.004"` lifts the film slightly off the artwork to avoid z-fighting.
+Because the film is a child of the anchor, **its size lives in the markup**: `#film` uses
+`width="1" height="0.3558"` - the artwork's aspect (3120 × 1110). If you change the artwork,
+update those two numbers (and the glow plane around it, `1.05` × `0.3736`).
+`position="0 0 0.004"` lifts the film a hair off the artwork to avoid z-fighting.
 
 ---
 
@@ -181,18 +183,10 @@ the tracker is matching the *printed* pixels.
 ### 3. Re-encode the film
 
 ```bash
-# 1080p (desktop)           + faststart  = starts while still downloading
+# one film file: assets/video.mp4  (faststart = starts playing while still downloading)
 ffmpeg -i input.mp4 -vf scale=1920:-2 -c:v libx264 -preset medium -crf 23 \
        -profile:v high -level 4.1 -pix_fmt yuv420p -movflags +faststart \
-       -c:a aac -b:a 128k -ac 2 assets/video-1080.mp4
-
-# 720p (phones)
-ffmpeg -i input.mp4 -vf scale=1280:-2 -c:v libx264 -preset medium -crf 26 \
-       -profile:v high -level 4.0 -pix_fmt yuv420p -movflags +faststart \
-       -c:a aac -b:a 96k -ac 2 assets/video-720.mp4
-
-# poster frame (shown before playback)
-ffmpeg -ss 2 -i input.mp4 -frames:v 1 -vf scale=1280:-2 -q:v 4 assets/poster.jpg
+       -c:a aac -b:a 128k -ac 2 assets/video.mp4
 ```
 
 Keep H.264 + AAC (`.mp4`); iOS will not play many other combinations in this context.
@@ -210,7 +204,7 @@ node tools/setup-site.js https://your-site.example/ar/
 ```bash
 node build/verify.mjs                # all suites
 node build/verify.mjs --only=banner  # print layout + QR decode
-node build/verify.mjs --only=ar      # app boot, camera, film, fallbacks
+node build/verify.mjs --only=ar      # app boot, camera, film
 node build/verify.mjs --only=detect  # REAL image tracking, end to end
 node build/verify.mjs --base=https://your-site/ --only=all   # verify a DEPLOYMENT (not localhost)
 ```
@@ -225,9 +219,10 @@ What it actually checks (headless Chrome + DevTools protocol, `build/cdp-check.m
 2. **printed QR decodes** – the QR is decoded straight out of the rendered `banner.png`
    (and `qr.png`) in the browser with the vendored decoder (`build/vendor/jsqr.js`) and
    asserted to encode exactly the URL in `banner/URL.txt`.
-3. **app boot** – libraries load, A-Frame scene initialises, one tap starts the camera
-   (fake camera), `arReady` fires, `.mind` is fetched, the film is fetched and bound as a
-   video texture, the plane matches the artwork aspect, the fallback player works.
+3. **app boot** – libraries load, A-Frame scene initialises, exactly one button exists on the
+   page (nothing else), one tap starts the camera (fake camera), `arReady` fires, `.mind` and
+   `video.mp4` are fetched, the film is bound as a video texture and the plane matches the
+   artwork aspect.
 4. **image tracking (end to end)** – the artwork itself is fed in as a fake camera feed;
    the test asserts `targetFound`, the anchor becomes visible, MindAR hides its scanning UI,
    the film plays, the pop-in animation completes, the overlay is upright/unmirrored and
@@ -238,10 +233,10 @@ What it actually checks (headless Chrome + DevTools protocol, `build/cdp-check.m
 | Symptom | Fix |
 | --- | --- |
 | "Camera unavailable" / permission prompt never appears | Serve over **HTTPS** (or localhost). In-app browsers (Instagram, Facebook, WeChat, LinkedIn) often block the camera — tell visitors to open in Safari/Chrome ("⋯ → Open in browser"). |
-| Page stuck on "Initialising AR engine" | No WebGL / GPU blocked. The app's watchdog surfaces the fallback player after 15 s. |
+| Start leaves you on the prompt forever | Either the camera is blocked (see above) or the device has no WebGL. The page replaces the prompt with a single line of text after 12 s. |
 | Artwork not recognised | Print bigger (A3), avoid glare, use even light, keep the *whole* artwork in frame, don't cover it with your hand, and recompile `targets.mind` if the artwork was edited. Very low-contrast or repetitive images track badly. |
-| Film appears but no sound | By design: playback starts muted (iOS autoplay rules) — tap the speaker button in the HUD. |
-| Film stutters on old phones | Ship/force the 720p file (`?q=sd`), or re-encode at CRF 28 / 960 px wide. |
+| Film appears but no sound | The browser refused unmuted autoplay, so the page fell back to silent playback (this is the only way to keep it button-free). On most phones the first tap on **Start** is enough for sound. |
+| Film stutters on old phones | Re-encode `assets/video.mp4` smaller: `-vf scale=1280:-2 -crf 27`. |
 | Tracking drifts/jitters | Raise `filterBeta` (more smoothing), or lower `missTolerance` to lose the target faster. |
 
 ## Files
@@ -251,9 +246,7 @@ index.html                  the AR page (single file: markup + CSS + app logic)
 assets/
   target.png                the artwork as printed (source for the tracker + banner)
   targets.mind              compiled image target used by MindAR (~1 MB)
-  poster.jpg                poster frame for the film
-  video-1080.mp4            1920x682 H.264/AAC, faststart  (9.8 MB)
-  video-720.mp4             1280x454 H.264/AAC, faststart  (3.8 MB)
+  video.mp4                 the film: 1920x682 H.264/AAC, faststart (9.8 MB)
 vendor/
   aframe-v1.5.0.min.js      A-Frame 1.5.0 (MIT)
   mindar-image-aframe.prod.js  MindAR 1.2.5 image tracking + A-Frame glue (MIT, bundles three.js + TensorFlow.js)
