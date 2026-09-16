@@ -56,7 +56,7 @@ function makeFakeCamera(dir) {
 }
 
 /* The AR view must always show the live camera - never a blank page. Runs the page against a
-   flat green fake camera with no artwork in sight and colour-checks the rendered pixels. */
+   flat green fake camera with no banner in sight and colour-checks the rendered pixels. */
 async function cameraSuite() {
   console.log('\n\n########## camera preview visible (not blank) ##########\n');
   const dir = mkdtempSync(join(tmpdir(), 'ar-camview-'));

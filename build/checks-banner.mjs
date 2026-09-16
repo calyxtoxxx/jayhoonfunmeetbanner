@@ -13,7 +13,7 @@ export default [
     expr: "(()=>{const bad=[];document.querySelectorAll('.sheet *').forEach(el=>{const ov=getComputedStyle(el).overflow;if(ov!=='visible')return;if(el.scrollHeight-el.clientHeight>5||el.scrollWidth-el.clientWidth>5)bad.push(((el.className||el.tagName)+'').slice(0,20)+' +'+(el.scrollHeight-el.clientHeight)+'x'+(el.scrollWidth-el.clientWidth))});return {ok:bad.length===0,bad};})()"
   },
   {
-    name: 'artwork printed large (>= 250mm wide)',
+    name: 'Banner printed large (>= 250mm wide)',
     expr: "(()=>{const i=document.querySelector('.art img');const r=i.getBoundingClientRect();const ar=i.naturalWidth/i.naturalHeight;let w=r.width,h=w/ar;if(h>r.height){h=r.height;w=h*ar;}const wmm=+(w/3.7795).toFixed(1),hmm=+(h/3.7795).toFixed(1);return {ok:i.complete&&i.naturalWidth===3120&&wmm>=250,nat:i.naturalWidth+'x'+i.naturalHeight,printed_mm:wmm+'x'+hmm};})()"
   },
   {

@@ -28,7 +28,7 @@ Nothing to install.
   QR + banner   :  node tools/setup-site.js https://your-site/   (no dependencies)
   verification  :  node build/verify.mjs                         (plain Node + Chrome)
 
-  artwork target:  node build/setup-toolchain.mjs --compiler     (installs MindAR + tf.js)
+  banner image target:  node build/setup-toolchain.mjs --compiler     (installs MindAR + tf.js)
 `);
   process.exit(0);
 }
@@ -59,7 +59,7 @@ writeFileSync(probe, "import { createCanvas, loadImage } from 'canvas';\n" +
 execFileSync(process.execPath, [probe], { cwd: HERE, stdio: 'inherit' });
 
 console.log(`
-Done. Compile the artwork with:
+Done. Compile the banner image with:
 
   node compile-target.mjs ../assets/target.png ../assets/targets.mind
 `);

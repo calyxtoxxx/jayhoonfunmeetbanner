@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#04060c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="description" content="Point your camera at the artwork and the film plays on top of it.">
+<meta name="description" content="Point your camera at the banner and the film plays on top of it.">
 <link rel="icon" href="data:,">
 <title>AR</title>
 
@@ -42,6 +42,20 @@
   #scan p{margin:0;font:600 12px/1.6 var(--mono);letter-spacing:.28em;text-transform:uppercase;
           color:#bfe9ff;text-shadow:0 2px 12px #000;max-width:26rem}
 
+  /* sound toggle: the film autoplays with sound when the browser allows it */
+  #sound{position:fixed;right:14px;bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:25;
+         width:50px;height:50px;border-radius:50%;border:0;cursor:pointer;
+         display:flex;align-items:center;justify-content:center;color:#eaf6ff;
+         background:rgba(8,14,24,.6);box-shadow:0 0 0 1px rgba(120,220,255,.35) inset;
+         -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  #sound svg{width:24px;height:24px}
+  #sound .speaker{fill:currentColor}
+  #sound .waves,#sound .slash{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round}
+  #sound .slash{display:none}
+  #sound.off{color:#8fb4cc}
+  #sound.off .waves{display:none}
+  #sound.off .slash{display:block}
+
   /* only shown when the camera really cannot open by itself */
   #error{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;
          justify-content:center;gap:20px;background:rgba(4,6,12,.92);padding:26px;text-align:center}
@@ -63,13 +77,21 @@
   <p id="scanText">Starting camera&hellip;</p>
 </div>
 
+<button id="sound" class="hidden" aria-label="Mute the film" aria-pressed="true">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path class="speaker" d="M4 9.2h3.1L11.6 5.4v13.2L7.1 14.8H4z"/>
+    <path class="waves" d="M14.8 9.1a4.6 4.6 0 0 1 0 5.8M17.4 6.6a8.1 8.1 0 0 1 0 10.8"/>
+    <path class="slash" d="M14.6 9.4l6 5.2m0-5.2l-6 5.2"/>
+  </svg>
+</button>
+
 <div id="error" class="hidden">
   <p id="errorText"></p>
   <button id="retry">Tap to open the camera</button>
 </div>
 
 <a-scene id="scene"
-         mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; missTolerance: 6; warmupTolerance: 4; filterMinCF: 0.0001; filterBeta: 0.01;"
+         mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; warmupTolerance: 5; missTolerance: 5; filterMinCF: 0.001; filterBeta: 1000;"
          color-space="sRGB"
          renderer="alpha: true; antialias: true; colorManagement: true"
          xr-mode-ui="enabled: false"
@@ -80,9 +102,9 @@
 
   <a-entity id="anchor" mindar-image-target="targetIndex: 0">
     <a-entity id="group" scale="0.001 0.001 0.001">
-      <a-plane position="0 0 -0.004" width="1.05" height="0.3736"
+      <a-plane position="0 0 -0.001" width="1.05" height="0.3736"
                material="color: #22e0ff; shader: flat; transparent: true; opacity: 0.35; side: double"></a-plane>
-      <a-video id="film" src="#arVideo" position="0 0 0.004" width="1" height="0.3558"></a-video>
+      <a-video id="film" src="#arVideo" position="0 0 0.001" width="1" height="0.3558"></a-video>
     </a-entity>
   </a-entity>
 </a-scene>
@@ -100,12 +122,27 @@
   var error    = document.querySelector('#error');
   var errorTx  = document.querySelector('#errorText');
   var retry    = document.querySelector('#retry');
+  var sound    = document.querySelector('#sound');
   var ready    = false;
   var opened   = false;
   var timer    = null;
-  var SCAN_TEXT = 'Point your camera at the artwork';
+  var SCAN_TEXT = 'Point your camera at the banner';
 
   function system() { return scene.systems && scene.systems['mindar-image-system']; }
+
+  /* The film autoplays with sound; the round button mutes/unmutes it. If the browser
+     refuses unmuted autoplay the film still plays, silently, with the button showing the
+     muted state so one tap turns the sound on. */
+  function setSound(on) {
+    video.muted = !on;
+    sound.classList.toggle('off', !on);
+    sound.setAttribute('aria-pressed', on ? 'true' : 'false');
+    sound.setAttribute('aria-label', on ? 'Mute the film' : 'Play the film with sound');
+    if (on) {
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  }
   function show(el) { el.classList.remove('hidden'); }
   function hide(el) { el.classList.add('hidden'); }
 
@@ -218,18 +255,24 @@
     openCamera();
   });
 
-  /* ---- artwork found: play the film on it --------------------------------- */
+  /* ---- banner found: play the film on it ---------------------------------- */
+  sound.addEventListener('click', function (e) {
+    e.stopPropagation();
+    setSound(video.muted);            /* muted -> unmute, playing -> mute */
+  });
+
   anchor.addEventListener('targetFound', function () {
     hide(scan);
+    show(sound);
     group.removeAttribute('animation__pop');
     group.setAttribute('animation__pop', {
       property: 'scale', from: '0.6 0.6 0.6', to: '1 1 1', dur: 420, easing: 'easeOutBack'
     });
-    video.muted = false;                     /* with sound when allowed... */
+    video.muted = false;                     /* autoplay WITH sound... */
     var p = video.play();
     if (p && p.catch) {
-      p.catch(function () {                  /* ...silently otherwise */
-        video.muted = true;
+      p.catch(function () {                  /* ...or silently if refused */
+        setSound(false);
         video.play().catch(function () {});
       });
     }
@@ -240,17 +283,6 @@
     video.pause();
   });
 
-  /* First touch anywhere turns the sound on (autoplay starts muted on phones). */
-  function unmute() {
-    document.removeEventListener('touchstart', unmute);
-    document.removeEventListener('click', unmute);
-    if (!video.muted) return;
-    video.muted = false;
-    var p = video.play();
-    if (p && p.catch) p.catch(function () {});
-  }
-  document.addEventListener('touchstart', unmute);
-  document.addEventListener('click', unmute);
 
   /* Never leave a dead screen: any unexpected error becomes a visible message. */
   window.addEventListener('error', function (e) {

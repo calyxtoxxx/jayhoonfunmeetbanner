@@ -1,5 +1,5 @@
-/* Does MindAR actually LOCK ON when the artwork is in view?
-   Fake camera feed = the artwork itself. */
+/* Does MindAR actually LOCK ON when the banner is in view?
+   Fake camera feed = the banner itself. */
 export default [
   {
     name: 'install AR probes',
@@ -10,18 +10,26 @@ export default [
   {
     /* the camera now opens on its own, so MindAR has often locked on before this suite can
        attach listeners - assert on the live state, and report whether the event was seen */
-    name: 'ARTWORK TRACKED (anchor locked onto the print)',
+    name: 'banner TRACKED (anchor locked onto the print)',
     expr: "(()=>{const vis=document.querySelector('#anchor').object3D.visible;return (window.__ar.found||vis)?{ok:true,event:window.__ar.found,anchorVisible:vis}:'not detected yet';})()",
     waitMs: 6000
   },
   { name: 'anchor is visible in the scene', expr: "document.querySelector('#anchor').object3D.visible" },
   {
-    name: 'scanning prompt hidden while the artwork is locked',
+    name: 'scanning prompt hidden while the banner is locked',
     expr: "document.querySelector('#scan').classList.contains('hidden')"
   },
   {
     name: 'film playing on the target',
     expr: "(()=>{const v=document.querySelector('#arVideo');return {playing:!v.paused,ready:v.readyState,muted:v.muted,soundRequested:true};})()"
+  },
+  {
+    name: 'sound button appears while the film plays',
+    expr: "(()=>{const b=document.querySelector('#sound');return {ok:!!b&&!b.classList.contains('hidden'),mutedLabel:b.getAttribute('aria-label')};})()"
+  },
+  {
+    name: 'sound button mutes and unmutes the film',
+    expr: "(()=>{const v=document.querySelector('#arVideo');const b=document.querySelector('#sound');const before=v.muted;b.click();const afterFirst=v.muted;b.click();const afterSecond=v.muted;return {ok:before!==afterFirst&&afterSecond===before,initial:before,afterFirstClick:afterFirst,afterSecondClick:afterSecond};})()"
   },
   {
     name: 'pop-in finished (group at scale 1)',
@@ -32,7 +40,7 @@ export default [
     expr: "(()=>{const T=AFRAME.THREE;const o=document.querySelector('#film').object3D;o.updateMatrixWorld(true);const up=new T.Vector3().setFromMatrixColumn(o.matrixWorld,1).normalize();const right=new T.Vector3().setFromMatrixColumn(o.matrixWorld,0).normalize();const normal=new T.Vector3().setFromMatrixColumn(o.matrixWorld,2).normalize();return {ok:up.y>0.7&&right.x>0.7&&normal.z>0.5,up_y:+up.y.toFixed(2),right_x:+right.x.toFixed(2),normal_z:+normal.z.toFixed(2)};})()"
   },
   {
-    name: 'overlay footprint is exactly the artwork (3120x1110)',
+    name: 'overlay footprint is exactly the banner (3120x1110)',
     expr: "(()=>{const T=AFRAME.THREE;const e=document.querySelector('#film');const g=e.getObject3D('mesh').geometry.parameters;const s=new T.Vector3();e.object3D.getWorldScale(s);return {ok:Math.abs(g.width*s.x-3120)<60&&Math.abs(g.height*s.y-1110)<60,w:+(g.width*s.x).toFixed(0),h:+(g.height*s.y).toFixed(0)};})()"
   },
   { name: 'tracking stays locked for 4s', expr: 'true', waitMs: 4000 },

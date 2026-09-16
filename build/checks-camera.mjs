@@ -1,4 +1,4 @@
-﻿/* What the AR view looks like when the artwork is NOT in frame: it must show the live camera,
+/* What the AR view looks like when the banner is NOT in frame: it must show the live camera,
    never a blank/black screen. The screenshot is colour-analysed by verify.mjs. */
 export default [
   { name: 'wait for the camera to start', expr: 'true', waitMs: 8000 },
@@ -10,5 +10,5 @@ export default [
     name: 'nothing is tracked yet',
     expr: "document.querySelector('#anchor').object3D.visible === false"
   },
-  { name: 'screenshot of the AR view (no artwork in frame)', screenshot: process.env.AR_SHOT }
+  { name: 'screenshot of the AR view (no banner in frame)', screenshot: process.env.AR_SHOT }
 ];

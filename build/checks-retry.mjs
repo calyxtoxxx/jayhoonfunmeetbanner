@@ -1,4 +1,4 @@
-﻿/* When a browser refuses to open the camera without a gesture (older iOS, or a blocked
+/* When a browser refuses to open the camera without a gesture (older iOS, or a blocked
    permission), the page must say why and the tap must actually start the camera. */
 export default [
   { name: 'wait for the failed automatic attempt', expr: 'true', waitMs: 5000 },

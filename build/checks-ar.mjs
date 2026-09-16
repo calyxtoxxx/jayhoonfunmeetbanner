@@ -13,8 +13,12 @@ export default [
     expr: "(()=>({start:!!document.querySelector('#start'),startBtn:!!document.querySelector('#startBtn'),splash:!!document.querySelector('#splash')}))()"
   },
   {
-    name: 'only UI element is the fallback tap button, and it is hidden',
-    expr: "(()=>{const btns=[...document.querySelectorAll('button')].map(b=>({id:b.id,visible:!!(b.offsetWidth||b.offsetHeight)}));const vis=btns.filter(b=>b.visible);return {buttons:btns, visible:vis.length};})()"
+    name: 'the only buttons are the hidden sound + tap fallbacks',
+    expr: "(()=>{const btns=[...document.querySelectorAll('button')].map(b=>({id:b.id,visible:!!(b.offsetWidth||b.offsetHeight)}));return {ok:btns.length===2&&btns.every(b=>!b.visible)&&!!document.querySelector('#sound')&&!!document.querySelector('#retry'),buttons:btns};})()"
+  },
+  {
+    name: 'prompt tells the visitor to point at the banner',
+    expr: "(()=>{const t=document.querySelector('#scanText').textContent;return {ok:/banner/i.test(t),text:t};})()"
   },
   {
     /* wait for the auto-start to complete: over a CDN the scene can take a few seconds to boot */
@@ -39,7 +43,7 @@ export default [
     expr: "(()=>{const e=document.querySelector('#film');const m=e.getObject3D('mesh');return {hasMesh:!!m,videoTexture:!!(m&&m.material&&m.material.map&&m.material.map.isVideoTexture)};})()"
   },
   {
-    name: 'plane matches the artwork aspect (3120x1110)',
+    name: 'plane matches the banner aspect (3120x1110)',
     expr: "(()=>{const e=document.querySelector('#film');const r=+(+e.getAttribute('width')/(+e.getAttribute('height'))).toFixed(3);return {ok:Math.abs(r-2.811)<0.05,ratio:r};})()"
   },
   {
@@ -55,7 +59,7 @@ export default [
     expr: "!document.querySelector('#scan').classList.contains('hidden')"
   },
   {
-    name: 'artwork anchor still hidden before detection',
+    name: 'banner anchor still hidden before detection',
     expr: "document.querySelector('#anchor').object3D.visible === false"
   },
   {
