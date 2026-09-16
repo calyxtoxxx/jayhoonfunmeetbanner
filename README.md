@@ -35,6 +35,9 @@ The site is 100 % static — upload the runtime folders to any HTTPS host:
 | --- | --- |
 | `index.html`, `assets/`, `vendor/` | `build/`, `tools/`, `banner/` |
 
+> **Live copy of this project:** <https://calyxtoxxx.github.io/jayhoonfunmeetbanner/>
+> (GitHub Pages serves the repo root over HTTPS, and `banner/qr.png` already points at it.)
+
 Any of these work in a minute:
 
 * **Netlify Drop** – drag the whole folder onto <https://app.netlify.com/drop>
@@ -182,6 +185,7 @@ node build/verify.mjs                # all suites
 node build/verify.mjs --only=banner  # print layout + QR decode
 node build/verify.mjs --only=ar      # app boot, camera, film, fallbacks
 node build/verify.mjs --only=detect  # REAL image tracking, end to end
+node build/verify.mjs --base=https://your-site/ --only=all   # verify a DEPLOYMENT (not localhost)
 ```
 
 Requirements: Google Chrome (or `CHROME=<path>`) and `ffmpeg` for the detection suite.
