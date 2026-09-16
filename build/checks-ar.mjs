@@ -1,4 +1,4 @@
-﻿/* index.html checks (run with --fake-camera). The page auto-opens the camera: no UI, no tap. */
+/* index.html checks (run with --fake-camera). The page auto-opens the camera: no UI, no tap. */
 export default [
   {
     name: 'libraries load (A-Frame + MindAR)',
@@ -17,8 +17,10 @@ export default [
     expr: "(()=>{const btns=[...document.querySelectorAll('button')].map(b=>({id:b.id,visible:!!(b.offsetWidth||b.offsetHeight)}));const vis=btns.filter(b=>b.visible);return {buttons:btns, visible:vis.length};})()"
   },
   {
+    /* wait for the auto-start to complete: over a CDN the scene can take a few seconds to boot */
     name: 'camera opened BY ITSELF (no click anywhere)',
-    expr: "(()=>{const s=document.querySelector('a-scene').systems['mindar-image-system'];const v=s.video;return {started:!!s.controller&&!!s.video,cameraVideo:!!(v&&v.srcObject),size:v?v.videoWidth+'x'+v.videoHeight:'none'};})()"
+    expr: "new Promise(function(res){var t0=Date.now();(function poll(){var sys=document.querySelector('a-scene').systems;var s=sys&&sys['mindar-image-system'];var v=s&&s.video;if(v&&v.srcObject&&v.videoWidth>0)return res({ok:true,cameraVideo:true,size:v.videoWidth+'x'+v.videoHeight,controller:!!s.controller});if(Date.now()-t0>15000)return res({ok:false,timedOut:true,cameraVideo:!!(v&&v.srcObject),size:v?v.videoWidth+'x'+v.videoHeight:'none'});setTimeout(poll,200);})()})",
+    await: true
   },
   {
     name: 'requested a sharper camera stream (1080p ideal)',
