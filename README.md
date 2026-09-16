@@ -1,0 +1,255 @@
+# AR Banner — scan the print, watch the film *on* the artwork
+
+A self-contained, app-free augmented-reality banner.
+
+```
+        ┌─────────────────────────────┐
+        │  printed banner (A4/A3)     │
+        │  ┌───────────────┐  █████   │        phone camera
+        │  │   artwork     │  █ QR █  │  ──►   scans the QR  ──►  opens https://…
+        │  └───────────────┘  █████   │
+        └─────────────────────────────┘                    │
+                                                          ▼
+                                    browser asks for the camera (one tap)
+                                                          │
+                            artwork is recognised every frame (MindAR + TF.js)
+                                                          │
+                                 ▼
+                          the film is welded onto the printed artwork
+                          and plays as you walk around it
+```
+
+* The **QR code** launches the web page. No app to install.
+* The page **recognises the artwork itself** (image tracking, not a black-and-white marker)
+  and plays `assets/video-*.mp4` locked onto the print, in real 3D.
+* Everything runs in the visitor's browser. The camera feed never leaves the device and is
+  never uploaded or recorded.
+
+---
+
+## 1. Deploy the website
+
+The site is 100 % static — upload the runtime folders to any HTTPS host:
+
+| Needed in production | Not needed in production (build/banner material) |
+| --- | --- |
+| `index.html`, `assets/`, `vendor/` | `build/`, `tools/`, `banner/` |
+
+Any of these work in a minute:
+
+* **Netlify Drop** – drag the whole folder onto <https://app.netlify.com/drop>
+* **Cloudflare Pages / Vercel / GitHub Pages** – point it at the repo, no build command
+* **Your own server** – just serve the folder over HTTPS (`npx serve`, nginx, …)
+
+> **HTTPS is mandatory.** Browsers only expose the camera in a *secure context*
+> (`https://…` or `http://localhost`). On plain `http://192.168.x.x` the page will show a
+> friendly warning and offer the no-AR player instead.
+
+## 2. Point the banner at your URL
+
+```bash
+node tools/setup-site.js https://your-site.example/ar/
+```
+
+This regenerates `banner/qr.png` / `banner/qr.svg` for that URL and rewrites
+`banner/banner.html` from `banner/banner.template.html`.
+Run it again any time the URL changes. **No dependencies, no install**: the QR encoder
+(`build/vendor/qrcode-generator.js`) and the PNG/SVG writers (`tools/make-qr.js`) are
+bundled, so it is plain Node.
+
+## 3. Print the banner
+
+Open `banner/banner.html` in Chrome → **Print → A4 landscape** (A3 works too and makes the
+artwork easier to track). Margins: none/`Default`. Enable **Background graphics** so the dark
+AR styling prints. Pre-rendered outputs are included:
+
+* `banner/banner.pdf` – print-ready, 1 page, A4 landscape
+* `banner/banner.png` – 2246 × 1588 preview/screen version
+
+Then scan the QR with a phone and point the camera at the printed artwork.
+
+---
+
+## Test it on your computer first
+
+```bash
+node tools/serve.js                 # → http://localhost:8080   (localhost counts as secure)
+node tools/serve.js --port 3000     # different port
+node tools/serve.js --https         # self-signed TLS, for testing on a phone over wifi
+```
+
+`localhost` is a secure context, so Chrome/Edge on the same computer can use the camera with no certificate at all.
+For a **phone on the same wifi**, use `--https` and accept the certificate
+warning (iOS requires a trusted certificate for the camera; the self-signed one only produces a
+warning you can dismiss — if the camera stays blocked, deploy to a real HTTPS host instead).
+
+---
+
+## `index.html` — the AR page
+
+| Piece | What it does |
+| --- | --- |
+| `#splash` | Launch screen. One tap is required: it unlocks audio and starts the camera. |
+| `#ar-loading` / `#ar-scanning` / `#ar-error` | MindAR's UI slots (MindAR toggles their `hidden` class). |
+| `#hud` | Sound toggle, fullscreen, exit. Appears while the artwork is locked. |
+| `#player` | "Watch without AR" fallback player (no camera / no WebGL / in-app browser). |
+| `<a-scene mindar-image>` | The AR engine: `assets/targets.mind` is the compiled artwork. |
+| `#arTarget` → `#arGroup` → `#arVideoPlane` | The film plane, a child of the tracked anchor, so it inherits the artwork pose. |
+| `#grade` | Cosmetic scanline/vignette layer over the AR view. |
+
+### URL switches
+
+| Parameter | Effect |
+| --- | --- |
+| `?q=sd` / `?q=hd` | Force the 720p (`3.8 MB`) or 1080p (`9.8 MB`) film. Default: SD on phones/slow links, HD on desktop. |
+| `?rot=180` | Rotate the film in-plane (debug). |
+| `?flipy=1` / `?flipx=1` | Mirror the film vertically/horizontally (debug). |
+
+### Tuning the tracking
+
+In the `mindar-image` attribute on `<a-scene>`:
+
+* `missTolerance` (default `6`) – frames the target may be missing before it is considered lost.
+* `warmupTolerance` (default `4`) – frames needed before the target is reported as found.
+* `filterMinCF` / `filterBeta` – jitter vs. lag of the pose filter.
+* `maxTrack: 1` – number of simultaneous targets (we compile a single target).
+
+Because the film is a child of the anchor, **sizing lives in markup**: `#arVideoPlane`
+uses `width="1" height="0.3558"` (the artwork's aspect, 3120 × 1110). If the artwork changes,
+update `width`/`height` and `TARGET_ASPECT` near the top of the script — or leave
+`TARGET_ASPECT` alone, since `fitPlane()` also reads the real video aspect from metadata.
+`position="0 0 0.004"` lifts the film slightly off the artwork to avoid z-fighting.
+
+---
+
+## Rebuilding the assets
+
+Only needed when the **artwork** or the **film** changes.
+
+### 1. Install the compiler (only if the artwork changes)
+
+```bash
+node build/setup-toolchain.mjs --compiler    # mind-ar + @napi-rs/canvas shim, no Python needed
+```
+
+`mind-ar` pulls in the native `canvas` package, which normally needs Python + Visual Studio /
+Xcode. We do not need it — the installer uses `--ignore-scripts` and shims `canvas` onto the
+prebuilt `@napi-rs/canvas`, which is all the offline compiler actually uses.
+
+### 2. Compile the artwork (image target)
+
+```bash
+cd build
+node compile-target.mjs ../assets/target.png ../assets/targets.mind
+```
+
+Use a sharp, high-contrast version of the printed artwork (the shipped image is
+3120 × 1110). MindAR extracts FREAK features + descriptors; the resulting `.mind` is the
+only file the browser needs (currently ~1 MB). **Recompile whenever the artwork changes** —
+the tracker is matching the *printed* pixels.
+
+### 3. Re-encode the film
+
+```bash
+# 1080p (desktop)           + faststart  = starts while still downloading
+ffmpeg -i input.mp4 -vf scale=1920:-2 -c:v libx264 -preset medium -crf 23 \
+       -profile:v high -level 4.1 -pix_fmt yuv420p -movflags +faststart \
+       -c:a aac -b:a 128k -ac 2 assets/video-1080.mp4
+
+# 720p (phones)
+ffmpeg -i input.mp4 -vf scale=1280:-2 -c:v libx264 -preset medium -crf 26 \
+       -profile:v high -level 4.0 -pix_fmt yuv420p -movflags +faststart \
+       -c:a aac -b:a 96k -ac 2 assets/video-720.mp4
+
+# poster frame (shown before playback)
+ffmpeg -ss 2 -i input.mp4 -frames:v 1 -vf scale=1280:-2 -q:v 4 assets/poster.jpg
+```
+
+Keep H.264 + AAC (`.mp4`); iOS will not play many other combinations in this context.
+
+### 4. Regenerate the QR + banner
+
+```bash
+node tools/setup-site.js https://your-site.example/ar/
+```
+
+---
+
+## Verification
+
+```bash
+node build/verify.mjs                # all suites
+node build/verify.mjs --only=banner  # print layout + QR decode
+node build/verify.mjs --only=ar      # app boot, camera, film, fallbacks
+node build/verify.mjs --only=detect  # REAL image tracking, end to end
+```
+
+Requirements: Google Chrome (or `CHROME=<path>`) and `ffmpeg` for the detection suite.
+No npm packages are needed for verification.
+
+What it actually checks (headless Chrome + DevTools protocol, `build/cdp-check.mjs`):
+
+1. **banner print layout** – A4 landscape, nothing overflows or is clipped, artwork printed
+   ≥ 250 mm wide, QR ≥ 45 mm.
+2. **printed QR decodes** – the QR is decoded straight out of the rendered `banner.png`
+   (and `qr.png`) in the browser with the vendored decoder (`build/vendor/jsqr.js`) and
+   asserted to encode exactly the URL in `banner/URL.txt`.
+3. **app boot** – libraries load, A-Frame scene initialises, one tap starts the camera
+   (fake camera), `arReady` fires, `.mind` is fetched, the film is fetched and bound as a
+   video texture, the plane matches the artwork aspect, the fallback player works.
+4. **image tracking (end to end)** – the artwork itself is fed in as a fake camera feed;
+   the test asserts `targetFound`, the anchor becomes visible, MindAR hides its scanning UI,
+   the film plays, the pop-in animation completes, the overlay is upright/unmirrored and
+   exactly the artwork's size, and that tracking stays locked for several seconds.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| "Camera unavailable" / permission prompt never appears | Serve over **HTTPS** (or localhost). In-app browsers (Instagram, Facebook, WeChat, LinkedIn) often block the camera — tell visitors to open in Safari/Chrome ("⋯ → Open in browser"). |
+| Page stuck on "Initialising AR engine" | No WebGL / GPU blocked. The app's watchdog surfaces the fallback player after 15 s. |
+| Artwork not recognised | Print bigger (A3), avoid glare, use even light, keep the *whole* artwork in frame, don't cover it with your hand, and recompile `targets.mind` if the artwork was edited. Very low-contrast or repetitive images track badly. |
+| Film appears but no sound | By design: playback starts muted (iOS autoplay rules) — tap the speaker button in the HUD. |
+| Film stutters on old phones | Ship/force the 720p file (`?q=sd`), or re-encode at CRF 28 / 960 px wide. |
+| Tracking drifts/jitters | Raise `filterBeta` (more smoothing), or lower `missTolerance` to lose the target faster. |
+
+## Files
+
+```
+index.html                  the AR page (single file: markup + CSS + app logic)
+assets/
+  target.png                the artwork as printed (source for the tracker + banner)
+  targets.mind              compiled image target used by MindAR (~1 MB)
+  poster.jpg                poster frame for the film
+  video-1080.mp4            1920x682 H.264/AAC, faststart  (9.8 MB)
+  video-720.mp4             1280x454 H.264/AAC, faststart  (3.8 MB)
+vendor/
+  aframe-v1.5.0.min.js      A-Frame 1.5.0 (MIT)
+  mindar-image-aframe.prod.js  MindAR 1.2.5 image tracking + A-Frame glue (MIT, bundles three.js + TensorFlow.js)
+banner/
+  banner.template.html      printable A4 landscape poster ({{URL}} placeholder)
+  banner.html              generated poster for the current URL
+  qr.png / qr.svg          generated QR codes
+  banner.pdf / banner.png  rendered print-ready PDF + preview
+  URL.txt                  the URL the banner currently points at
+tools/
+  serve.js                 zero-dependency dev server (range requests, optional --https)
+  setup-site.js            regenerate QR + banner for a URL (no dependencies)
+  make-qr.js               bundled QR encoder + minimal PNG/SVG writer
+build/
+  verify.mjs               one-command verification (see above)
+  cdp-check.mjs            headless-Chrome/CDP test harness
+  checks-*.mjs             the individual test suites (banner, QR, app, tracking)
+  compile-target.mjs       artwork → .mind (MindAR offline compiler, run after --compiler)
+  setup-toolchain.mjs      optional: installs the image-target compiler
+  vendor/qrcode-generator.js  MIT QR encoder used by tools/make-qr.js
+  vendor/jsqr.js           Apache-2.0 QR decoder used by the verification suite
+```
+
+## Third-party
+
+Vendored for self-hosting and offline reliability: [A-Frame](https://aframe.io) 1.5.0 (MIT),
+[MindAR](https://github.com/hiukim/mind-ar-js) 1.2.5 (MIT, bundles three.js – MIT – and
+TensorFlow.js – Apache-2.0). Build/verification extras: [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator)
+(MIT) for QR encoding and [jsQR](https://github.com/cozmo/jsQR) (Apache-2.0) for decoding it
+back as a test. The artwork and film belong to their owner.

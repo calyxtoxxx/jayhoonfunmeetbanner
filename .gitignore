@@ -1,0 +1,8 @@
+﻿# build-only junk
+build/node_modules/
+build/probe.mjs
+.certs/
+
+# OS cruft
+Thumbs.db
+.DS_Store

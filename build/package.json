@@ -1,0 +1,12 @@
+{
+  "name": "ar-banner-build",
+  "private": true,
+  "type": "module",
+  "description": "Optional build-only toolchain: compiles the artwork into a MindAR image target. Everything else (QR, banner, verification) runs on plain Node with no dependencies.",
+  "scripts": {
+    "setup:compiler": "node setup-toolchain.mjs --compiler",
+    "compile": "node compile-target.mjs ../assets/target.png ../assets/targets.mind",
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {}
+}
