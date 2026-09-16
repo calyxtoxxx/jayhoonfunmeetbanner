@@ -16,7 +16,7 @@ export default [
   },
   { name: 'anchor is visible in the scene', expr: "document.querySelector('#anchor').object3D.visible" },
   {
-    name: 'scanning prompt auto-hidden by MindAR',
+    name: 'scanning prompt hidden while the artwork is locked',
     expr: "document.querySelector('#scan').classList.contains('hidden')"
   },
   {

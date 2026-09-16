@@ -114,6 +114,30 @@ async function main() {
     });
   }
 
+  /* --fail-first-gum simulates iOS-style behaviour: the camera is refused until the user
+     taps (the first getUserMedia call rejects, later ones succeed) */
+  if (process.argv.includes('--fail-first-gum')) {
+    await send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(function(){
+        var md = navigator.mediaDevices;
+        if (!md || !md.getUserMedia) return;
+        var orig = md.getUserMedia.bind(md);
+        var n = 0;
+        window.__gumFails = 0;
+        md.getUserMedia = function(c){
+          n++;
+          if (n === 1) {
+            window.__gumFails++;
+            var e = new Error('simulated permission block');
+            e.name = 'NotAllowedError';
+            return Promise.reject(e);
+          }
+          return orig(c);
+        };
+      })();`
+    });
+  }
+
   await send('Page.navigate', { url });
   await sleep(2500);
 

@@ -89,6 +89,14 @@ async function cameraSuite() {
   try { rmSync(dir, { recursive: true, force: true }); } catch (e) {}
 }
 
+/* Camera refused until the user taps: the page must explain it and the tap must work. */
+async function retrySuite() {
+  console.log('\n\n########## blocked camera -> tap fallback ##########\n');
+  const code = await runNode(['cdp-check.mjs', BASE, join(HERE, 'checks-retry.mjs'),
+    '--fake-camera', '--fail-first-gum']);
+  results.push({ name: 'blocked camera -> tap fallback', ok: code === 0 });
+}
+
 const results = [];
 async function suite(name, url, checks, extra = []) {
   console.log(`\n\n########## ${name} ##########\n`);
@@ -109,6 +117,7 @@ try {
   }
   if (only === 'all' || only === 'ar') await suite('app boot / camera / film', BASE, 'checks-ar.mjs', ['--fake-camera', '--spy-gum']);
   if (only === 'all' || only === 'ar' || only === 'camera') await cameraSuite();
+  if (only === 'all' || only === 'ar' || only === 'retry') await retrySuite();
 
   if (only === 'all' || only === 'detect') {
     tmp = mkdtempSync(join(tmpdir(), 'ar-cam-'));
