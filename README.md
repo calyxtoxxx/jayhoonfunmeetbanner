@@ -269,7 +269,7 @@ index.html                  the AR page (single file: markup + CSS + app logic)
 assets/
   target.png                the banner image as printed (source for the tracker + the poster)
   targets.mind              compiled image target used by MindAR (~1 MB)
-  video.mp4                 the film: 1920x682 H.264/AAC, faststart (9.8 MB)
+  video.mp4                 the film: 1920x682 H.264/AAC, faststart (19.7 MB)
 vendor/
   aframe-v1.5.0.min.js      A-Frame 1.5.0 (MIT)
   mindar-image-aframe.prod.js  MindAR 1.2.5 image tracking + A-Frame glue (MIT, bundles three.js + TensorFlow.js)
