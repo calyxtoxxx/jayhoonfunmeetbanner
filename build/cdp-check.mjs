@@ -6,7 +6,7 @@
  * The steps module exports an array of { name, expr?, click?, waitMs?, await? }.
  * Prints PASS/FAIL per step plus every console error / uncaught exception.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -38,6 +38,22 @@ let chromeErr = '';
 chrome.stderr.on('data', (d) => { chromeErr += d.toString(); });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Chrome runs as a whole process tree (browser + gpu + renderer + utility + crashpad),
+   and the pid we spawned usually exits early because Chrome re-execs itself. Killing that
+   pid therefore leaves the real tree behind; they piled up between runs (140+ alive at
+   once), starved the machine and made the suites flaky. Every process of OUR browser
+   carries --user-data-dir=<unique temp profile>, so kill by that instead. */
+function killChromeTree() {
+  try { chrome.kill(); } catch (e) { /* already gone */ }
+  if (process.platform !== 'win32') return;
+  try {
+    const ps = `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | ` +
+      `Where-Object { $_.CommandLine -like '*${profile}*' } | ` +
+      `ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+    spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { stdio: 'ignore' });
+  } catch (e) { /* best effort */ }
+}
 
 async function listTargets() {
   const res = await fetch(`http://127.0.0.1:${PORT}/json/list`);
@@ -139,6 +155,27 @@ async function main() {
   }
 
   await send('Page.navigate', { url });
+
+  /* Wait for the document to be PARSED before running any step. A fixed sleep is not
+     enough here: the AR page pulls several MB of scripts in <head>, so a short sleep can
+     expire while the parser is still inside <head> (document.body === null). Probe steps
+     then threw "Cannot read properties of null (reading 'addEventListener')".
+     readyState leaves 'loading' at DOMContentLoaded, which is also the point where
+     <a-scene> and the A-Frame entities exist, so it is the right signal for every suite. */
+  let parsed = false;
+  for (let i = 0; i < 120; i++) {                        /* up to ~30 s */
+    try {
+      const r = await send('Runtime.evaluate', {
+        expression: "document.readyState !== 'loading' && !!document.body",
+        returnByValue: true
+      });
+      if (r.result && r.result.value === true) { parsed = true; break; }
+    } catch (e) { /* navigation still in flight */ }
+    await sleep(250);
+  }
+  if (!parsed) console.log('! document never finished parsing in 30 s - running steps anyway');
+  /* then keep the original settle time: the suites rely on the page having had a few
+     seconds to boot (camera start, prompt copy, tracking warm-up) */
   await sleep(2500);
 
   const steps = (await import(pathToFileURL(stepsFile).href)).default;
@@ -193,7 +230,7 @@ async function main() {
   exceptions.slice(0, 12).forEach((e) => console.log('  ! ' + String(e).split('\n').slice(0, 6).join('\n    ')));
 
   ws.close();
-  chrome.kill();
+  killChromeTree();
   await sleep(400);
   try { rmSync(profile, { recursive: true, force: true }); } catch (e) {}
   process.exit(failed || exceptions.length ? 1 : 0);
@@ -201,7 +238,7 @@ async function main() {
 
 main().catch(async (e) => {
   console.error('harness error: ' + e.message);
-  chrome.kill();
+  killChromeTree();
   await sleep(300);
   try { rmSync(profile, { recursive: true, force: true }); } catch (e2) {}
   process.exit(2);
